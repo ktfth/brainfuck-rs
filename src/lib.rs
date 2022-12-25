@@ -81,6 +81,10 @@ pub enum AstNodeType {
   Output,
   Input,
   Loop(bool),
+  #[allow(dead_code)]
+  Ignore,
+  #[allow(dead_code)]
+  WhiteSpace,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -178,8 +182,20 @@ impl Parser {
           body: None,
         }
       },
-      TokenType::WhiteSpace => self.expression(),
-      TokenType::Ignore => self.expression(),
+      TokenType::WhiteSpace => {
+        Node {
+          token,
+          kind: AstNodeType::WhiteSpace,
+          body: None,
+        }
+      },
+      TokenType::Ignore => {
+        Node {
+          token,
+          kind: AstNodeType::Ignore,
+          body: None,
+        }
+      },
       _ => panic!("Unexpected token: {:?}", token),
     }
   }
@@ -225,6 +241,7 @@ impl Interpreter {
       Some(body) => {
         for node in body.iter() {
           match node.kind {
+            AstNodeType::Ignore | AstNodeType::WhiteSpace => {},
             AstNodeType::CellIncrement => self.cells[self.pointer] += 1,
             AstNodeType::CellDecrement => self.cells[self.pointer] -= 1,
             AstNodeType::PointerIncrement => {
