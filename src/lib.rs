@@ -207,81 +207,57 @@ pub struct Interpreter {
   pub ast: Ast,
   pub cells: Vec<u8>,
   pub pointer: usize,
-  pub root_pointer: usize,
 }
 
 impl Interpreter {
-  pub fn new(ast: Ast, cells: Option<Vec<u8>>, pointer: Option<usize>, root_pointer: Option<usize>) -> Interpreter {
-    match cells {
-      Some(cells) => Interpreter {
-        ast,
-        cells,
-        pointer: pointer.unwrap_or(0),
-        root_pointer: root_pointer.unwrap_or(0),
+  pub fn new(ast: Ast) -> Interpreter {
+    Interpreter {
+      ast,
+      cells: vec![0; 30000],
+      pointer: 0,
+    }
+  }
+
+  pub fn interpret(&mut self, nodes: Option<&Vec<Node>>) {
+    match nodes {
+      Some(body) => {
+        for node in body.iter() {
+          match node.kind {
+            AstNodeType::CellIncrement => self.cells[self.pointer] += 1,
+            AstNodeType::CellDecrement => self.cells[self.pointer] -= 1,
+            AstNodeType::PointerIncrement => {
+              self.pointer += 1;
+            },
+            AstNodeType::PointerDecrement => {
+              self.pointer -= 1;
+            },
+            AstNodeType::Output => {
+              if self.cells[self.pointer] > 0 {
+                print!("{}", self.cells[self.pointer] as char);
+              } else {
+                println!("");
+              }
+            },
+            AstNodeType::Input => {
+              let mut input = String::new();
+              std::io::stdin().read_line(&mut input).unwrap();
+              self.cells[self.pointer] = input.chars().next().unwrap() as u8;
+            },
+            AstNodeType::Loop(_) => {
+              self.interpret_loop(&node.body.as_ref().unwrap().body);
+            },
+          }
+        }
       },
-      None => Interpreter {
-        ast,
-        cells: vec![0; 30000],
-        pointer: pointer.unwrap_or(0),
-        root_pointer: root_pointer.unwrap_or(0),
+      None => {
+        self.interpret(Some(&self.ast.body.clone()));
       },
     }
   }
 
-  pub fn interpret(&mut self) {
-    for node in self.ast.body.iter() {
-      match node.kind {
-        AstNodeType::CellIncrement => self.cells[self.pointer] += 1,
-        AstNodeType::CellDecrement => self.cells[self.pointer] -= 1,
-        AstNodeType::PointerIncrement => {
-          self.root_pointer += 1;
-          self.pointer += 1;
-        },
-        AstNodeType::PointerDecrement => {
-          self.root_pointer -= 1;
-          self.pointer -= 1;
-        },
-        AstNodeType::Output => {
-          if self.cells[self.pointer] > 0 {
-            print!("{}", self.cells[self.pointer] as char);
-          } else {
-            println!("");
-          }
-        },
-        AstNodeType::Input => {
-          let mut input = String::new();
-          std::io::stdin().read_line(&mut input).unwrap();
-          self.cells[self.pointer] = input.chars().next().unwrap() as u8;
-        },
-        AstNodeType::Loop(_) => {
-          for sub_node in node.body.clone().unwrap().body {
-            match sub_node.kind {
-              AstNodeType::CellIncrement => self.cells[self.pointer] += self.cells[self.root_pointer],
-              AstNodeType::CellDecrement => self.cells[self.pointer] -= self.cells[self.root_pointer],
-              AstNodeType::PointerIncrement => self.pointer += 1,
-              AstNodeType::PointerDecrement => self.pointer -= 1,
-              AstNodeType::Output => {
-                if self.cells[self.pointer] > 0 {
-                  print!("{}", self.cells[self.pointer] as char);
-                } else {
-                  println!("");
-                }
-              },
-              AstNodeType::Input => {
-                let mut input = String::new();
-                std::io::stdin().read_line(&mut input).unwrap();
-                self.cells[self.pointer] = input.chars().next().unwrap() as u8;
-              },
-              AstNodeType::Loop(_) => {
-                let mut interpreter = Interpreter::new(Ast {
-                  body: vec![sub_node],
-                }, Some(self.cells.clone()), Some(self.pointer), Some(self.root_pointer));
-                interpreter.interpret();
-              },
-            }      
-          }
-        },
-      }
+  fn interpret_loop(&mut self, nodes: &Vec<Node>) {
+    while self.cells[self.pointer] != 0 {
+      self.interpret(Some(nodes));
     }
   }
 }
@@ -330,7 +306,7 @@ mod tests {
     let tokens = lexer.tokenize();
     let mut parser = Parser::new(tokens);
     let ast = parser.parse();
-    let mut interpreter = Interpreter::new(ast, None, None, None);
-    interpreter.interpret();
+    let mut interpreter = Interpreter::new(ast);
+    interpreter.interpret(None);
   }
 }

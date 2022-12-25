@@ -11,6 +11,6 @@ fn main() {
     let tokens = lexer.tokenize();
     let mut parser = Parser::new(tokens);
     let ast = parser.parse();
-    let mut interpreter = Interpreter::new(ast, None, None, None);
-    interpreter.interpret();
+    let mut interpreter = Interpreter::new(ast);
+    interpreter.interpret(None);
 }
