@@ -10,6 +10,7 @@ pub enum TokenType {
   Input,
   LoopStart,
   LoopEnd,
+  WhiteSpace,
   EOF,
 }
 
@@ -50,7 +51,8 @@ impl Lexer {
         "[" => TokenType::LoopStart,
         "]" => TokenType::LoopEnd,
         "" => TokenType::EOF,
-        _ => panic!("Unexpected character: {}", c),
+        " " => TokenType::WhiteSpace,
+        _ => panic!("Unexpected character: {} at {}", c, i + 1),
       };
 
       match kind {
@@ -175,6 +177,7 @@ impl Parser {
           body: None,
         }
       },
+      TokenType::WhiteSpace => self.expression(),
       _ => panic!("Unexpected token: {:?}", token),
     }
   }
@@ -208,26 +211,21 @@ pub struct Interpreter {
 }
 
 impl Interpreter {
-  pub fn new(ast: Ast, cells: Option<Vec<u8>>, pointer: Option<usize>) -> Interpreter {
+  pub fn new(ast: Ast, cells: Option<Vec<u8>>, pointer: Option<usize>, root_pointer: Option<usize>) -> Interpreter {
     match cells {
       Some(cells) => Interpreter {
         ast,
         cells,
         pointer: pointer.unwrap_or(0),
-        root_pointer: 0,
+        root_pointer: root_pointer.unwrap_or(0),
       },
       None => Interpreter {
         ast,
         cells: vec![0; 30000],
         pointer: pointer.unwrap_or(0),
-        root_pointer: 0,
+        root_pointer: root_pointer.unwrap_or(0),
       },
     }
-    // Interpreter {
-    //   ast,
-    //   cells: vec![0; 30000],
-    //   pointer: 0,
-    // }
   }
 
   pub fn interpret(&mut self) {
@@ -277,7 +275,7 @@ impl Interpreter {
               AstNodeType::Loop(_) => {
                 let mut interpreter = Interpreter::new(Ast {
                   body: vec![sub_node],
-                }, Some(self.cells.clone()), Some(self.pointer));
+                }, Some(self.cells.clone()), Some(self.pointer), Some(self.root_pointer));
                 interpreter.interpret();
               },
             }      
@@ -302,7 +300,7 @@ mod tests {
   }
 
   #[test]
-  fn test_parser() {;
+  fn test_parser() {
     let mut parser = Parser::new(vec![Token {
       pos: 0,
       kind: TokenType::IncrementValue,
@@ -332,7 +330,7 @@ mod tests {
     let tokens = lexer.tokenize();
     let mut parser = Parser::new(tokens);
     let ast = parser.parse();
-    let mut interpreter = Interpreter::new(ast, None, None);
+    let mut interpreter = Interpreter::new(ast, None, None, None);
     interpreter.interpret();
   }
 }
