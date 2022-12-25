@@ -11,6 +11,7 @@ pub enum TokenType {
   LoopStart,
   LoopEnd,
   WhiteSpace,
+  Ignore,
   EOF,
 }
 
@@ -52,7 +53,7 @@ impl Lexer {
         "]" => TokenType::LoopEnd,
         "" => TokenType::EOF,
         " " => TokenType::WhiteSpace,
-        _ => panic!("Unexpected character: {} at {}", c, i + 1),
+        _ => TokenType::Ignore,
       };
 
       match kind {
@@ -178,6 +179,7 @@ impl Parser {
         }
       },
       TokenType::WhiteSpace => self.expression(),
+      TokenType::Ignore => self.expression(),
       _ => panic!("Unexpected token: {:?}", token),
     }
   }

@@ -28,7 +28,7 @@ Or just visiting the `https://rustup.rs` to see other instructions. With this in
 you can follow the next steps as run to see the project in action.
 
 ```
-cargo run -- input.bf
+cargo run -- ./examples/input.bf
 ```
 
 Note: The file can be whatever you need.
