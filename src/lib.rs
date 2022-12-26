@@ -1,4 +1,4 @@
-const EMPTY: &'static str = "";
+use wasm_bindgen::prelude::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TokenType {
@@ -34,7 +34,7 @@ impl Lexer {
   }
 
   pub fn eat_first_emptyspace(&mut self) -> Vec<&str> {
-    self.input.split(EMPTY).into_iter().enumerate().filter(|(i, c)| {
+    self.input.split("").into_iter().enumerate().filter(|(i, c)| {
       let c = *c;
       !(*i == 0 && c.is_empty())
     }).map(|(_, c)| c).collect::<Vec<&str>>()
@@ -73,18 +73,19 @@ impl Lexer {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum AstNodeType {
+pub enum NodeType {
   CellIncrement,
   CellDecrement,
   PointerIncrement,
   PointerDecrement,
   Output,
   Input,
-  Loop(bool),
   #[allow(dead_code)]
   Ignore,
   #[allow(dead_code)]
   WhiteSpace,
+  LoopStart,
+  LoopEnd,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -95,7 +96,7 @@ pub struct Ast {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Node {
   pub token: Token,
-  pub kind: AstNodeType,
+  pub kind: NodeType,
   pub body: Option<Box<Ast>>,
 }
 
@@ -130,32 +131,32 @@ impl Parser {
     match token.kind {
       TokenType::IncrementValue => Node {
         token,
-        kind: AstNodeType::CellIncrement,
+        kind: NodeType::CellIncrement,
         body: None,
       },
       TokenType::DecrementValue => Node {
         token,
-        kind: AstNodeType::CellDecrement,
+        kind: NodeType::CellDecrement,
         body: None,
       },
       TokenType::IncrementPointer => Node {
         token,
-        kind: AstNodeType::PointerIncrement,
+        kind: NodeType::PointerIncrement,
         body: None,
       },
       TokenType::DecrementPointer => Node {
         token,
-        kind: AstNodeType::PointerDecrement,
+        kind: NodeType::PointerDecrement,
         body: None,
       },
       TokenType::Output => Node {
         token,
-        kind: AstNodeType::Output,
+        kind: NodeType::Output,
         body: None,
       },
       TokenType::Input => Node {
         token,
-        kind: AstNodeType::Input,
+        kind: NodeType::Input,
         body: None,
       },
       TokenType::LoopStart => {
@@ -171,28 +172,28 @@ impl Parser {
 
         Node {
           token,
-          kind: AstNodeType::Loop(false),
+          kind: NodeType::LoopStart,
           body: Some(Box::new(ast)),
         }
       },
       TokenType::LoopEnd => {
         Node {
           token,
-          kind: AstNodeType::Loop(true),
+          kind: NodeType::LoopEnd,
           body: None,
         }
       },
       TokenType::WhiteSpace => {
         Node {
           token,
-          kind: AstNodeType::WhiteSpace,
+          kind: NodeType::WhiteSpace,
           body: None,
         }
       },
       TokenType::Ignore => {
         Node {
           token,
-          kind: AstNodeType::Ignore,
+          kind: NodeType::Ignore,
           body: None,
         }
       },
@@ -241,30 +242,31 @@ impl Interpreter {
       Some(body) => {
         for node in body.iter() {
           match node.kind {
-            AstNodeType::Ignore | AstNodeType::WhiteSpace => {},
-            AstNodeType::CellIncrement => self.cells[self.pointer] += 1,
-            AstNodeType::CellDecrement => self.cells[self.pointer] -= 1,
-            AstNodeType::PointerIncrement => {
+            NodeType::Ignore | NodeType::WhiteSpace => {},
+            NodeType::CellIncrement => self.cells[self.pointer] += 1,
+            NodeType::CellDecrement => self.cells[self.pointer] -= 1,
+            NodeType::PointerIncrement => {
               self.pointer += 1;
             },
-            AstNodeType::PointerDecrement => {
+            NodeType::PointerDecrement => {
               self.pointer -= 1;
             },
-            AstNodeType::Output => {
+            NodeType::Output => {
               if self.cells[self.pointer] != 0 {
                 print!("{}", self.cells[self.pointer] as char);
               } else {
                 println!("");
               }
             },
-            AstNodeType::Input => {
+            NodeType::Input => {
               let mut input = String::new();
               std::io::stdin().read_line(&mut input).unwrap();
               self.cells[self.pointer] = input.chars().next().unwrap() as u8;
             },
-            AstNodeType::Loop(_) => {
+            NodeType::LoopStart => {
               self.interpret_loop(&node.body.as_ref().unwrap().body);
             },
+            NodeType::LoopEnd => {},
           }
         }
       },
@@ -279,6 +281,16 @@ impl Interpreter {
       self.interpret(Some(nodes));
     }
   }
+}
+
+#[wasm_bindgen]
+pub fn run(code: &str) {
+  let mut lexer = Lexer::new(code);
+  let tokens = lexer.tokenize();
+  let mut parser = Parser::new(tokens);
+  let ast = parser.parse();
+  let mut interpreter = Interpreter::new(ast);
+  interpreter.interpret(None);
 }
 
 #[cfg(test)]
@@ -313,7 +325,7 @@ mod tests {
           kind: TokenType::IncrementValue,
           lexeme: '+',
         },
-        kind: AstNodeType::CellIncrement,
+        kind: NodeType::CellIncrement,
         body: None,
       }],
     });
@@ -327,5 +339,10 @@ mod tests {
     let ast = parser.parse();
     let mut interpreter = Interpreter::new(ast);
     interpreter.interpret(None);
+  }
+
+  #[test]
+  fn test_run() {
+    run("++++++++++[>++++++++>+++++++++++>++++++++++>++++>+++>++++++++>++++++++++++>+++++++++++>++++++++++>+++++++++++>+++>+<<<<<<<<<<<<-]>-.>--.>---.>++++.>++.>---.>---.>.>.>+.>+++.>.");
   }
 }
