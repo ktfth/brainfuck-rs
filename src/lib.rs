@@ -246,15 +246,9 @@ impl Interpreter {
             AstNodeType::CellDecrement => self.cells[self.pointer] -= 1,
             AstNodeType::PointerIncrement => {
               self.pointer += 1;
-              if self.pointer >= 30_000 {
-                self.pointer = 0;
-              }
             },
             AstNodeType::PointerDecrement => {
               self.pointer -= 1;
-              if self.pointer <= 0 {
-                self.pointer = 30_000 - 1;
-              }
             },
             AstNodeType::Output => {
               if self.cells[self.pointer] != 0 {
