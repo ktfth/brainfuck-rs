@@ -276,21 +276,71 @@ impl Interpreter {
     }
   }
 
+  pub fn interpret_web(&mut self, nodes: Option<&Vec<Node>>) -> String {
+    let mut out = String::new();
+
+    match nodes {
+      Some(body) => {
+        for node in body.iter() {
+          match node.kind {
+            NodeType::Ignore | NodeType::WhiteSpace => {},
+            NodeType::CellIncrement => self.cells[self.pointer] += 1,
+            NodeType::CellDecrement => self.cells[self.pointer] -= 1,
+            NodeType::PointerIncrement => {
+              self.pointer += 1;
+            },
+            NodeType::PointerDecrement => {
+              self.pointer -= 1;
+            },
+            NodeType::Output => {
+              if self.cells[self.pointer] != 0 {
+                out.push(self.cells[self.pointer] as char);
+              } else {
+                out.push('\n');
+              }
+            },
+            NodeType::Input => {},
+            NodeType::LoopStart => {
+              out.push_str(self.interpret_web_loop(&node.body.as_ref().unwrap().body).as_str());
+            },
+            NodeType::LoopEnd => {},
+          }
+        }
+      },
+      None => {
+        out.push_str(self.interpret_web(Some(&self.ast.body.clone())).as_str());
+      },
+    }
+
+    out
+  }
+
   fn interpret_loop(&mut self, nodes: &Vec<Node>) {
     while self.cells[self.pointer] != 0 {
       self.interpret(Some(nodes));
     }
   }
+
+  fn interpret_web_loop(&mut self, nodes: &Vec<Node>) -> String {
+    let mut out = String::new();
+
+    while self.cells[self.pointer] != 0 {
+      out.push_str(self.interpret_web(Some(nodes)).as_str());
+    }
+
+    out
+  }
 }
 
 #[wasm_bindgen]
-pub fn run(code: &str) {
+#[allow(dead_code)]
+pub fn run(code: &str) -> String {
   let mut lexer = Lexer::new(code);
   let tokens = lexer.tokenize();
   let mut parser = Parser::new(tokens);
   let ast = parser.parse();
   let mut interpreter = Interpreter::new(ast);
-  interpreter.interpret(None);
+  interpreter.interpret_web(None)
 }
 
 #[cfg(test)]
