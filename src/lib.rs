@@ -231,7 +231,7 @@ impl Interpreter {
   pub fn new(ast: Ast) -> Interpreter {
     Interpreter {
       ast,
-      cells: vec![0; 30000],
+      cells: vec![0; 30_000],
       pointer: 0,
     }
   }
@@ -246,12 +246,18 @@ impl Interpreter {
             AstNodeType::CellDecrement => self.cells[self.pointer] -= 1,
             AstNodeType::PointerIncrement => {
               self.pointer += 1;
+              if self.pointer >= 30_000 {
+                self.pointer = 0;
+              }
             },
             AstNodeType::PointerDecrement => {
               self.pointer -= 1;
+              if self.pointer <= 0 {
+                self.pointer = 30_000 - 1;
+              }
             },
             AstNodeType::Output => {
-              if self.cells[self.pointer] > 0 {
+              if self.cells[self.pointer] != 0 {
                 print!("{}", self.cells[self.pointer] as char);
               } else {
                 println!("");
