@@ -242,14 +242,21 @@ impl Interpreter {
       Some(body) => {
         for node in body.iter() {
           match node.kind {
-            NodeType::Ignore | NodeType::WhiteSpace => {},
+            NodeType::Ignore | NodeType::WhiteSpace | NodeType::LoopEnd => {},
             NodeType::CellIncrement => self.cells[self.pointer] += 1,
             NodeType::CellDecrement => self.cells[self.pointer] -= 1,
             NodeType::PointerIncrement => {
               self.pointer += 1;
+              if self.pointer >= self.cells.len() {
+                self.pointer = 0;
+              }
             },
             NodeType::PointerDecrement => {
-              self.pointer -= 1;
+              if self.pointer == 0 {
+                self.pointer = self.cells.len() - 1;
+              } else {
+                self.pointer -= 1;
+              }
             },
             NodeType::Output => {
               if self.cells[self.pointer] != 0 {
@@ -266,7 +273,6 @@ impl Interpreter {
             NodeType::LoopStart => {
               self.interpret_loop(&node.body.as_ref().unwrap().body);
             },
-            NodeType::LoopEnd => {},
           }
         }
       },
@@ -283,14 +289,21 @@ impl Interpreter {
       Some(body) => {
         for node in body.iter() {
           match node.kind {
-            NodeType::Ignore | NodeType::WhiteSpace => {},
+            NodeType::Ignore | NodeType::WhiteSpace | NodeType::LoopEnd => {},
             NodeType::CellIncrement => self.cells[self.pointer] += 1,
             NodeType::CellDecrement => self.cells[self.pointer] -= 1,
             NodeType::PointerIncrement => {
               self.pointer += 1;
+              if self.pointer >= self.cells.len() {
+                self.pointer = 0;
+              }
             },
             NodeType::PointerDecrement => {
-              self.pointer -= 1;
+              if self.pointer == 0 {
+                self.pointer = self.cells.len() - 1;
+              } else {
+                self.pointer -= 1;
+              }
             },
             NodeType::Output => {
               if self.cells[self.pointer] != 0 {
@@ -303,7 +316,6 @@ impl Interpreter {
             NodeType::LoopStart => {
               out.push_str(self.interpret_web_loop(&node.body.as_ref().unwrap().body).as_str());
             },
-            NodeType::LoopEnd => {},
           }
         }
       },

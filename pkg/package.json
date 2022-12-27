@@ -1,10 +1,17 @@
 {
   "name": "brainfuck-rs",
+  "description": "A Brainfuck interpreter written in Rust",
   "version": "0.1.0",
+  "license": "BSD-3-Clause",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ktfth/brainfuck-rs"
+  },
   "files": [
     "brainfuck_bg.wasm",
     "brainfuck.js",
-    "brainfuck.d.ts"
+    "brainfuck.d.ts",
+    "LICENSE.md"
   ],
   "module": "brainfuck.js",
   "types": "brainfuck.d.ts",
