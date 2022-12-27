@@ -1,0 +1,12 @@
+{
+  "name": "brainfuck-rs",
+  "version": "0.1.0",
+  "files": [
+    "brainfuck_bg.wasm",
+    "brainfuck.js",
+    "brainfuck.d.ts"
+  ],
+  "module": "brainfuck.js",
+  "types": "brainfuck.d.ts",
+  "sideEffects": false
+}
