@@ -1,3 +1,5 @@
+use std::io::{self, Read};
+
 use wasm_bindgen::prelude::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -86,6 +88,8 @@ pub enum NodeType {
   WhiteSpace,
   LoopStart,
   LoopEnd,
+  #[allow(dead_code)]
+  EOF,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -222,27 +226,70 @@ impl Parser {
   }
 }
 
-pub struct Interpreter {
+pub trait Output {
+  fn output(&mut self) -> io::Result<()>;
+}
+
+pub trait Loop {
+  fn loop_start(&mut self, nodes: &Vec<Node>) -> io::Result<()>;
+  fn loop_end(&self, nodes: &Vec<Node>);
+}
+
+pub trait Input {
+  fn input(&mut self);
+}
+
+pub struct Interpreter<'a> {
   pub ast: Ast,
   pub cells: Vec<u8>,
   pub pointer: usize,
+  pub output: &'a mut dyn io::Write,
 }
 
-impl Interpreter {
-  pub fn new(ast: Ast) -> Interpreter {
-    Interpreter {
+impl<'a> Output for Interpreter<'a> {
+  fn output(&mut self) -> io::Result<()> {
+    write!(self.output, "{}", self.cells[self.pointer] as char)?;
+    Ok(())
+  }
+}
+
+impl<'a> Input for Interpreter<'a> {
+  fn input(&mut self) {
+    let mut input: [u8; 1] = [0];
+    if let Err(error) = std::io::stdin().read_exact(&mut input) {
+      panic!("Error reading input: {}", error);
+    }
+    self.cells[self.pointer] = input[0];
+  }
+}
+
+impl<'a> Loop for Interpreter<'a> {
+  fn loop_start(&mut self, nodes: &Vec<Node>) -> io::Result<()> {
+    while self.cells[self.pointer] != 0 {
+      self.interpret(Some(&nodes))?;
+    } 
+    Ok(())
+  }
+
+  fn loop_end(&self, _nodes: &Vec<Node>) {}
+}
+
+impl<'a> Interpreter<'a> {
+  pub fn new(ast: Ast, output: &'a mut dyn io::Write) -> Self {
+    Self {
       ast,
       cells: vec![0; 30_000],
       pointer: 0,
+      output,
     }
   }
 
-  pub fn interpret(&mut self, nodes: Option<&Vec<Node>>) {
+  pub fn interpret(&mut self, nodes: Option<&Vec<Node>>) -> io::Result<()> {
     match nodes {
       Some(body) => {
         for node in body.iter() {
           match node.kind {
-            NodeType::Ignore | NodeType::WhiteSpace | NodeType::LoopEnd => {},
+            NodeType::Ignore | NodeType::WhiteSpace | NodeType::LoopEnd | NodeType::EOF => {},
             NodeType::CellIncrement => self.cells[self.pointer] += 1,
             NodeType::CellDecrement => self.cells[self.pointer] -= 1,
             NodeType::PointerIncrement => {
@@ -259,89 +306,78 @@ impl Interpreter {
               }
             },
             NodeType::Output => {
-              if self.cells[self.pointer] != 0 {
-                print!("{}", self.cells[self.pointer] as char);
-              } else {
-                println!("");
-              }
+              self.output()?;
             },
             NodeType::Input => {
-              let mut input = String::new();
-              std::io::stdin().read_line(&mut input).unwrap();
-              self.cells[self.pointer] = input.chars().next().unwrap() as u8;
+              self.input();
             },
             NodeType::LoopStart => {
-              self.interpret_loop(&node.body.as_ref().unwrap().body);
+              self.loop_start(&node.body.as_ref().unwrap().body)?;
             },
           }
         }
       },
       None => {
-        self.interpret(Some(&self.ast.body.clone()));
+        self.interpret(Some(&self.ast.body.clone()))?;
       },
     }
+    Ok(())
   }
 
-  pub fn interpret_web(&mut self, nodes: Option<&Vec<Node>>) -> String {
-    let mut out = String::new();
+  // pub fn interpret_web(&mut self, nodes: Option<&Vec<Node>>) -> String {
+  //   let mut out = String::new();
 
-    match nodes {
-      Some(body) => {
-        for node in body.iter() {
-          match node.kind {
-            NodeType::Ignore | NodeType::WhiteSpace | NodeType::LoopEnd => {},
-            NodeType::CellIncrement => self.cells[self.pointer] += 1,
-            NodeType::CellDecrement => self.cells[self.pointer] -= 1,
-            NodeType::PointerIncrement => {
-              self.pointer += 1;
-              if self.pointer >= self.cells.len() {
-                self.pointer = 0;
-              }
-            },
-            NodeType::PointerDecrement => {
-              if self.pointer == 0 {
-                self.pointer = self.cells.len() - 1;
-              } else {
-                self.pointer -= 1;
-              }
-            },
-            NodeType::Output => {
-              if self.cells[self.pointer] != 0 {
-                out.push(self.cells[self.pointer] as char);
-              } else {
-                out.push('\n');
-              }
-            },
-            NodeType::Input => {},
-            NodeType::LoopStart => {
-              out.push_str(self.interpret_web_loop(&node.body.as_ref().unwrap().body).as_str());
-            },
-          }
-        }
-      },
-      None => {
-        out.push_str(self.interpret_web(Some(&self.ast.body.clone())).as_str());
-      },
-    }
+  //   match nodes {
+  //     Some(body) => {
+  //       for node in body.iter() {
+  //         match node.kind {
+  //           NodeType::Ignore | NodeType::WhiteSpace | NodeType::LoopEnd | NodeType::EOF => {},
+  //           NodeType::CellIncrement => self.cells[self.pointer] += 1,
+  //           NodeType::CellDecrement => self.cells[self.pointer] -= 1,
+  //           NodeType::PointerIncrement => {
+  //             self.pointer += 1;
+  //             if self.pointer >= self.cells.len() {
+  //               self.pointer = 0;
+  //             }
+  //           },
+  //           NodeType::PointerDecrement => {
+  //             if self.pointer == 0 {
+  //               self.pointer = self.cells.len() - 1;
+  //             } else {
+  //               self.pointer -= 1;
+  //             }
+  //           },
+  //           NodeType::Output => {
+  //             if self.cells[self.pointer] != 0 {
+  //               out.push(self.cells[self.pointer] as char);
+  //             } else {
+  //               out.push('\n');
+  //             }
+  //           },
+  //           NodeType::Input => {},
+  //           NodeType::LoopStart => {
+  //             out.push_str(self.interpret_web_loop(&node.body.as_ref().unwrap().body).as_str());
+  //           },
+  //         }
+  //       }
+  //     },
+  //     None => {
+  //       out.push_str(self.interpret_web(Some(&self.ast.body.clone())).as_str());
+  //     },
+  //   }
 
-    out
-  }
+  //   out
+  // }
 
-  fn interpret_loop(&mut self, nodes: &Vec<Node>) {
-    while self.cells[self.pointer] != 0 {
-      self.interpret(Some(nodes));
-    }
-  }
+  // fn interpret_web_loop(&mut self, nodes: &Vec<Node>) -> String {
+  //   let mut out = String::new();
 
-  fn interpret_web_loop(&mut self, nodes: &Vec<Node>) -> String {
-    let mut out = String::new();
+  //   while self.cells[self.pointer] != 0 {
+  //     out.push_str(self.interpret_web(Some(nodes)).as_str());
+  //   }
 
-    while self.cells[self.pointer] != 0 {
-      out.push_str(self.interpret_web(Some(nodes)).as_str());
-    }
-
-    out
-  }
+  //   out
+  // }
 }
 
 #[wasm_bindgen]
@@ -351,8 +387,10 @@ pub fn run(code: &str) -> String {
   let tokens = lexer.tokenize();
   let mut parser = Parser::new(tokens);
   let ast = parser.parse();
-  let mut interpreter = Interpreter::new(ast);
-  interpreter.interpret_web(None)
+  let mut stdout: Vec<u8> = Vec::new();
+  let mut interpreter = Interpreter::new(ast, &mut stdout);
+  interpreter.interpret(None).unwrap();
+  stdout.iter().map(|&c| c as char).collect::<String>()
 }
 
 #[cfg(test)]
@@ -399,8 +437,10 @@ mod tests {
     let tokens = lexer.tokenize();
     let mut parser = Parser::new(tokens);
     let ast = parser.parse();
-    let mut interpreter = Interpreter::new(ast);
-    interpreter.interpret(None);
+    let mut stdout: Vec<u8> = Vec::new();
+    let mut interpreter = Interpreter::new(ast, &mut stdout);
+    interpreter.interpret(None).unwrap();
+    assert_eq!(stdout.iter().map(|&c| c as char).collect::<String>(), "Ola, Mundo!\n".to_string());
   }
 
   #[test]
