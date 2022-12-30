@@ -292,10 +292,10 @@ impl<'a> Interpreter<'a> {
     }
   }
 
-  pub fn interpret(&mut self, nodes: Option<&Vec<Node>>) -> io::Result<()> {
-    match nodes {
-      Some(n) => {
-        for node in n.iter() {
+  pub fn interpret(&mut self, body: Option<&Vec<Node>>) -> io::Result<()> {
+    match body {
+      Some(nodes) => {
+        for node in nodes.iter() {
           match &node.kind {
             NodeType::Ignore | NodeType::WhiteSpace | NodeType::LoopStart | NodeType::LoopEnd | NodeType::EOF => {},
             NodeType::CellIncrement => self.cells[self.pointer] += 1,
