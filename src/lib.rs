@@ -319,8 +319,8 @@ impl<'a> Interpreter<'a> {
             NodeType::Input => {
               self.input();
             },
-            NodeType::Loop(body) => {
-              self.iterate(&body)?;
+            NodeType::Loop(sequence) => {
+              self.iterate(&sequence)?;
             },
           }
         }
