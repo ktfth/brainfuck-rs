@@ -67,7 +67,7 @@ impl<'a> Lexer<'a> {
   }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NodeType {
   CellIncrement,
   CellDecrement,
@@ -79,6 +79,8 @@ pub enum NodeType {
   Ignore,
   #[allow(dead_code)]
   WhiteSpace,
+  Loop(Vec<Node>),
+  #[allow(dead_code)]
   LoopStart,
   LoopEnd,
   #[allow(dead_code)]
@@ -94,7 +96,8 @@ pub struct Ast {
 pub struct Node {
   pub token: Token,
   pub kind: NodeType,
-  pub body: Option<Box<Ast>>,
+  // pub body: Option<Box<Ast>>,
+  pub body: Option<Vec<Node>>,
 }
 
 pub struct Parser {
@@ -157,20 +160,21 @@ impl Parser {
         body: None,
       },
       TokenType::LoopStart => {
-        let mut ast = Ast {
-          body: vec![],
-        };
+        // let mut ast = Ast {
+        //   body: vec![],
+        // };
+        let mut nodes = vec![];
 
         while !self.is_at_end() && self.peek().kind != TokenType::LoopEnd {
-          ast.body.push(self.expression());
+          nodes.push(self.expression());
         }
 
         self.advance();
 
         Node {
           token,
-          kind: NodeType::LoopStart,
-          body: Some(Box::new(ast)),
+          kind: NodeType::Loop(nodes.clone()),
+          body: Some(nodes.clone()),
         }
       },
       TokenType::LoopEnd => {
@@ -224,7 +228,8 @@ pub trait Output {
 }
 
 pub trait Loop {
-  fn loop_start(&mut self, nodes: &Vec<Node>) -> io::Result<()>;
+  fn iterate(&mut self, nodes: &Vec<Node>) -> io::Result<()>;
+  fn loop_start(&mut self, nodes: &Vec<Node>);
   fn loop_end(&self, nodes: &Vec<Node>);
 }
 
@@ -248,21 +253,31 @@ impl<'a> Output for Interpreter<'a> {
 
 impl<'a> Input for Interpreter<'a> {
   fn input(&mut self) {
-    let mut input: [u8; 1] = [0];
-    if let Err(error) = std::io::stdin().read_exact(&mut input) {
-      panic!("Error reading input: {}", error);
+    let mut buffer: [u8; 1] = [0];
+    if let Err(error) = std::io::stdin().read_exact(&mut buffer) {
+      if error.kind() == io::ErrorKind::UnexpectedEof {
+        panic!("Read failed with: {}", error);
+      }
     }
-    self.cells[self.pointer] = input[0];
+    match buffer[0] {
+      10 => self.cells[self.pointer] = 0,
+      _ => self.cells[self.pointer] = buffer[0],
+    }
   }
 }
 
 impl<'a> Loop for Interpreter<'a> {
-  fn loop_start(&mut self, nodes: &Vec<Node>) -> io::Result<()> {
-    while self.cells[self.pointer] != 0 {
+  fn iterate(&mut self, nodes: &Vec<Node>) -> io::Result<()> {
+    loop {
+      if self.cells[self.pointer] == 0 {
+        break;
+      }
       self.interpret(Some(&nodes))?;
-    } 
+    }
     Ok(())
   }
+
+  fn loop_start(&mut self, _nodes: &Vec<Node>) {}
 
   fn loop_end(&self, _nodes: &Vec<Node>) {}
 }
@@ -279,10 +294,10 @@ impl<'a> Interpreter<'a> {
 
   pub fn interpret(&mut self, nodes: Option<&Vec<Node>>) -> io::Result<()> {
     match nodes {
-      Some(body) => {
-        for node in body.iter() {
-          match node.kind {
-            NodeType::Ignore | NodeType::WhiteSpace | NodeType::LoopEnd | NodeType::EOF => {},
+      Some(n) => {
+        for node in n.iter() {
+          match &node.kind {
+            NodeType::Ignore | NodeType::WhiteSpace | NodeType::LoopStart | NodeType::LoopEnd | NodeType::EOF => {},
             NodeType::CellIncrement => self.cells[self.pointer] += 1,
             NodeType::CellDecrement => self.cells[self.pointer] -= 1,
             NodeType::PointerIncrement => {
@@ -304,8 +319,8 @@ impl<'a> Interpreter<'a> {
             NodeType::Input => {
               self.input();
             },
-            NodeType::LoopStart => {
-              self.loop_start(&node.body.as_ref().unwrap().body)?;
+            NodeType::Loop(body) => {
+              self.iterate(&body)?;
             },
           }
         }
@@ -321,7 +336,8 @@ impl<'a> Interpreter<'a> {
 #[wasm_bindgen]
 #[allow(dead_code)]
 pub fn run(code: &str) -> String {
-  let mut lexer = Lexer::new(code);
+  let input = format!("{}\0", code);
+  let mut lexer = Lexer::new(&input);
   let tokens = lexer.tokenize();
   let mut parser = Parser::new(tokens);
   let ast = parser.parse();
