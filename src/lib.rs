@@ -1,4 +1,4 @@
-use std::io::{self, Read};
+use std::{io::{self, Read}, char};
 
 use wasm_bindgen::prelude::*;
 
@@ -24,37 +24,30 @@ pub struct Token {
   pub lexeme: char,
 }
 
-pub struct Lexer {
-  pub input: String,
+pub struct Lexer<'a> {
+  pub input: &'a str,
 }
 
-impl Lexer {
+impl<'a> Lexer<'a> {
   pub fn new(input: &str) -> Lexer {
     Lexer {
-      input: input.to_string(),
+      input,
     }
   }
 
-  pub fn eat_first_emptyspace(&mut self) -> Vec<&str> {
-    self.input.split("").into_iter().enumerate().filter(|(i, c)| {
-      let c = *c;
-      !(*i == 0 && c.is_empty())
-    }).map(|(_, c)| c).collect::<Vec<&str>>()
-  }
-
   pub fn tokenize(&mut self) -> Vec<Token> {
-    self.eat_first_emptyspace().into_iter().enumerate().map(|(i, c)| {
+    self.input.chars().enumerate().map(|(i, c)| {
       let kind = match c {
-        ">" => TokenType::IncrementPointer,
-        "<" => TokenType::DecrementPointer,
-        "+" => TokenType::IncrementValue,
-        "-" => TokenType::DecrementValue,
-        "." => TokenType::Output,
-        "," => TokenType::Input,
-        "[" => TokenType::LoopStart,
-        "]" => TokenType::LoopEnd,
-        "" => TokenType::EOF,
-        " " => TokenType::WhiteSpace,
+        '>' => TokenType::IncrementPointer,
+        '<' => TokenType::DecrementPointer,
+        '+' => TokenType::IncrementValue,
+        '-' => TokenType::DecrementValue,
+        '.' => TokenType::Output,
+        ',' => TokenType::Input,
+        '[' => TokenType::LoopStart,
+        ']' => TokenType::LoopEnd,
+        '\0' => TokenType::EOF,
+        ' ' => TokenType::WhiteSpace,
         _ => TokenType::Ignore,
       };
 
@@ -67,7 +60,7 @@ impl Lexer {
         _ => Token {
           pos: i + 1,
           kind,
-          lexeme: c.chars().next().unwrap(),
+          lexeme: c,
         },
       }
     }).collect::<Vec<Token>>()   
@@ -323,61 +316,6 @@ impl<'a> Interpreter<'a> {
     }
     Ok(())
   }
-
-  // pub fn interpret_web(&mut self, nodes: Option<&Vec<Node>>) -> String {
-  //   let mut out = String::new();
-
-  //   match nodes {
-  //     Some(body) => {
-  //       for node in body.iter() {
-  //         match node.kind {
-  //           NodeType::Ignore | NodeType::WhiteSpace | NodeType::LoopEnd | NodeType::EOF => {},
-  //           NodeType::CellIncrement => self.cells[self.pointer] += 1,
-  //           NodeType::CellDecrement => self.cells[self.pointer] -= 1,
-  //           NodeType::PointerIncrement => {
-  //             self.pointer += 1;
-  //             if self.pointer >= self.cells.len() {
-  //               self.pointer = 0;
-  //             }
-  //           },
-  //           NodeType::PointerDecrement => {
-  //             if self.pointer == 0 {
-  //               self.pointer = self.cells.len() - 1;
-  //             } else {
-  //               self.pointer -= 1;
-  //             }
-  //           },
-  //           NodeType::Output => {
-  //             if self.cells[self.pointer] != 0 {
-  //               out.push(self.cells[self.pointer] as char);
-  //             } else {
-  //               out.push('\n');
-  //             }
-  //           },
-  //           NodeType::Input => {},
-  //           NodeType::LoopStart => {
-  //             out.push_str(self.interpret_web_loop(&node.body.as_ref().unwrap().body).as_str());
-  //           },
-  //         }
-  //       }
-  //     },
-  //     None => {
-  //       out.push_str(self.interpret_web(Some(&self.ast.body.clone())).as_str());
-  //     },
-  //   }
-
-  //   out
-  // }
-
-  // fn interpret_web_loop(&mut self, nodes: &Vec<Node>) -> String {
-  //   let mut out = String::new();
-
-  //   while self.cells[self.pointer] != 0 {
-  //     out.push_str(self.interpret_web(Some(nodes)).as_str());
-  //   }
-
-  //   out
-  // }
 }
 
 #[wasm_bindgen]
@@ -399,7 +337,7 @@ mod tests {
 
   #[test]
   fn test_tokenize() {
-    let mut lexer = Lexer::new("++++++++++[>++++++++>+++++++++++>++++++++++>++++>+++>++++++++>++++++++++++>+++++++++++>++++++++++>+++++++++++>+++>+<<<<<<<<<<<<-]>-.>--.>---.>++++.>++.>---.>---.>.>.>+.>+++.>.");
+    let mut lexer = Lexer::new("++++++++++[>++++++++>+++++++++++>++++++++++>++++>+++>++++++++>++++++++++++>+++++++++++>++++++++++>+++++++++++>+++>+<<<<<<<<<<<<-]>-.>--.>---.>++++.>++.>---.>---.>.>.>+.>+++.>.\0");
     let tokens = lexer.tokenize();
     assert_eq!(tokens.len(), 176);
     assert_eq!(tokens[0].kind, TokenType::IncrementValue);
@@ -433,7 +371,7 @@ mod tests {
 
   #[test]
   fn test_interpreter() {
-    let mut lexer = Lexer::new("++++++++++[>++++++++>+++++++++++>++++++++++>++++>+++>++++++++>++++++++++++>+++++++++++>++++++++++>+++++++++++>+++>+<<<<<<<<<<<<-]>-.>--.>---.>++++.>++.>---.>---.>.>.>+.>+++.>.");
+    let mut lexer = Lexer::new("++++++++++[>++++++++>+++++++++++>++++++++++>++++>+++>++++++++>++++++++++++>+++++++++++>++++++++++>+++++++++++>+++>+<<<<<<<<<<<<-]>-.>--.>---.>++++.>++.>---.>---.>.>.>+.>+++.>.\0");
     let tokens = lexer.tokenize();
     let mut parser = Parser::new(tokens);
     let ast = parser.parse();
@@ -445,6 +383,6 @@ mod tests {
 
   #[test]
   fn test_run() {
-    run("++++++++++[>++++++++>+++++++++++>++++++++++>++++>+++>++++++++>++++++++++++>+++++++++++>++++++++++>+++++++++++>+++>+<<<<<<<<<<<<-]>-.>--.>---.>++++.>++.>---.>---.>.>.>+.>+++.>.");
+    run("++++++++++[>++++++++>+++++++++++>++++++++++>++++>+++>++++++++>++++++++++++>+++++++++++>++++++++++>+++++++++++>+++>+<<<<<<<<<<<<-]>-.>--.>---.>++++.>++.>---.>---.>.>.>+.>+++.>.\0");
   }
 }
